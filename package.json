@@ -1,5 +1,5 @@
 {
-  "name": "rollup",
+  "name": "@mapbox/rollup",
   "version": "0.56.5",
   "description": "Next-generation ES6 module bundler",
   "main": "dist/rollup.js",
