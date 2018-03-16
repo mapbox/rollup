@@ -1,7 +1,7 @@
 import { InputOptions } from '../rollup';
 
 type StartTime = [number, number] | number;
-type Timer = { time: number; start: StartTime };
+type Timer = { time: number; start: StartTime; first: StartTime };
 type Timers = { [label: string]: Timer };
 export type SerializedTimings = { [label: string]: number };
 
@@ -9,6 +9,7 @@ const NOOP = () => {};
 
 let getStartTime: () => StartTime = () => 0;
 let getElapsedTime: (previous: StartTime) => number = () => 0;
+let getNormalizedStartTime: (time: StartTime) => number = () => 0;
 
 let timers: Timers = {};
 
@@ -18,9 +19,11 @@ function setTimeHelpers() {
 	if (typeof process !== 'undefined' && typeof process.hrtime === 'function') {
 		getStartTime = process.hrtime.bind(process);
 		getElapsedTime = (previous: [number, number]) => normalizeHrTime(process.hrtime(previous));
+		getNormalizedStartTime = normalizeHrTime;
 	} else if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
 		getStartTime = performance.now.bind(performance);
 		getElapsedTime = (previous: number) => performance.now() - previous;
+		getNormalizedStartTime = (time: number) => time;
 	}
 }
 
@@ -39,13 +42,15 @@ function getPersistedLabel(label: string, level: number) {
 
 function timeStartImpl(label: string, level: number = 3) {
 	label = getPersistedLabel(label, level);
+	const now = getStartTime();
 	if (!timers.hasOwnProperty(label)) {
 		timers[label] = {
+			first: now,
 			start: undefined,
 			time: 0
 		};
 	}
-	timers[label].start = getStartTime();
+	timers[label].start = now;
 }
 
 function timeEndImpl(label: string, level: number = 3) {
@@ -57,9 +62,13 @@ function timeEndImpl(label: string, level: number = 3) {
 
 export function getTimings(): SerializedTimings {
 	const newTimings: SerializedTimings = {};
-	Object.keys(timers).forEach(label => {
-		newTimings[label] = timers[label].time;
-	});
+	Object.keys(timers)
+		.sort(
+			(a, b) => getNormalizedStartTime(timers[a].first) - getNormalizedStartTime(timers[b].first)
+		)
+		.forEach(label => {
+			newTimings[label] = timers[label].time;
+		});
 	return newTimings;
 }
 
